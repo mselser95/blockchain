@@ -6,7 +6,7 @@ jobs:
   build_and_test: # this can be any name you choose
     executor:
       name: go/default # Use the default executor from the orb
-      tag: '1.23.0' # Specify a version tag
+      tag: '1.20.0' # Specify a version tag
     steps:
       - checkout
       - go/load-cache
@@ -18,7 +18,7 @@ jobs:
           no_output_timeout: 15m
           race: true
           timeout: 15m
-          
+
 # Orchestrate jobs using workflows
 # See: https://circleci.com/docs/workflows/ & https://circleci.com/docs/configuration-reference/#workflows
 workflows:
