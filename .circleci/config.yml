@@ -3,7 +3,7 @@ version: 2.1
 jobs:
   build:
     docker:
-      - image: circleci/golang:1.18  # Use the appropriate Go version
+      - image: 1.23.0-bullseye
     steps:
       - checkout
 
