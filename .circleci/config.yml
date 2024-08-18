@@ -1,32 +1,20 @@
 version: 2.1
 
-orbs:
-  go: circleci/go@1.11
 jobs:
-  build_and_test: # this can be any name you choose
-    executor:
-      name: go/default # Use the default executor from the orb
-      tag: '1.21' # Specify a version tag
+  build:
+    docker:
+      - image: cimg/go:1.16
     steps:
       - checkout
-      - go/load-cache
-      - go/mod-download
-      - go/save-cache
-      - go/test:
-          covermode: atomic
-          failfast: true
-          no_output_timeout: 15m
-          race: true
-          timeout: 15m
+      - run: go build
+      - run:
+          name: "Create a temp directory for artifacts"
+          command: |
+            mkdir -p /tmp/artifacts
+      - run:
+          command: |
+            go test -coverprofile=c.out
+            go tool cover -html=c.out -o coverage.html
+            mv coverage.html /tmp/artifacts
       - store_artifacts:
-          path: cover-source.out
-          destination: coverage/coverage.out
-      - store_test_results:
-          path: test_results
-# Orchestrate jobs using workflows
-# See: https://circleci.com/docs/workflows/ & https://circleci.com/docs/configuration-reference/#workflows
-workflows:
-  build-workflow: # This is the name of the workflow, feel free to change it to better match your workflow.
-    # Inside the workflow, you define the jobs you want to run.
-    jobs:
-      - build_and_test
+          path: /tmp/artifacts
