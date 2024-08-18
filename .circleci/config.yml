@@ -1,34 +1,28 @@
 version: 2.1
 
+orbs:
+  go: circleci/go@1.11
 jobs:
-  build:
-    docker:
-      - image: 1.23.0-bullseye
+  build_and_test: # this can be any name you choose
+    executor:
+      name: go/default # Use the default executor from the orb
+      tag: '1.23.0' # Specify a version tag
     steps:
       - checkout
-
-      - run:
-          name: Install Dependencies
-          command: go mod download
-
-      - run:
-          name: Run Tests with Coverage
-          command: |
-            mkdir -p coverage
-            go test -v -coverprofile=coverage/coverage.out ./...
-      
-      - run:
-          name: Display Coverage Report
-          command: go tool cover -func=coverage/coverage.out
-
-      - run:
-          name: Upload Coverage to Codecov
-          command: |
-            bash <(curl -s https://codecov.io/bash) -t $CODECOV_TOKEN
-          when: always
-
+      - go/load-cache
+      - go/mod-download
+      - go/save-cache
+      - go/test:
+          covermode: atomic
+          failfast: true
+          no_output_timeout: 15m
+          race: true
+          timeout: 15m
+          
+# Orchestrate jobs using workflows
+# See: https://circleci.com/docs/workflows/ & https://circleci.com/docs/configuration-reference/#workflows
 workflows:
-  version: 2
-  build_and_test:
+  build-workflow: # This is the name of the workflow, feel free to change it to better match your workflow.
+    # Inside the workflow, you define the jobs you want to run.
     jobs:
-      - build
+      - build_and_test
