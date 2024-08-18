@@ -6,7 +6,7 @@ jobs:
   build_and_test: # this can be any name you choose
     executor:
       name: go/default # Use the default executor from the orb
-      tag: '1.20.0' # Specify a version tag
+      tag: '1.21' # Specify a version tag
     steps:
       - checkout
       - go/load-cache
