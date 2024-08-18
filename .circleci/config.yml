@@ -1,20 +1,44 @@
 version: 2.1
 
+orbs:
+  go: circleci/go@1.11
 jobs:
-  build:
-    docker:
-      - image: cimg/go:1.21
+  build_and_test: # this can be any name you choose
+    executor:
+      name: go/default # Use the default executor from the orb
+      tag: '1.21' # Specify a version tag
     steps:
       - checkout
-      - run: go build
+      - go/load-cache
+      - go/mod-download
+      - go/save-cache
+      - go/test:
+          covermode: atomic
+          failfast: true
+          no_output_timeout: 15m
+          race: true
+          timeout: 15m
+
+      # Generate the HTML report from the coverage data
       - run:
-          name: "Create a temp directory for artifacts"
-          command: |
-            mkdir -p /tmp/artifacts
-      - run:
-          command: |
-            go test -coverprofile=c.out ./...
-            go tool cover -html=c.out -o coverage.html
-            mv coverage.html /tmp/artifacts
+          name: Generate HTML Coverage Report
+          command: go tool cover -html=cover-source.out -o coverage.html
+
+      # Save the HTML coverage report as an artifact
       - store_artifacts:
-          path: /tmp/artifacts
+          path: coverage.html
+          destination: coverage/coverage.html
+
+      # Save the raw coverage file (optional)
+      - store_artifacts:
+          path: cover.out
+          destination: coverage/coverage.out
+
+      # Save test results (if any)
+      - store_test_results:
+          path: test_results
+          
+workflows:
+  build-workflow: 
+    jobs:
+      - build_and_test
