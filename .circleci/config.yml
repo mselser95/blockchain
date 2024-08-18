@@ -18,7 +18,13 @@ jobs:
           no_output_timeout: 15m
           race: true
           timeout: 15m
-
+          # Save coverage output to a file
+          coverage_file: coverage.out
+      - store_artifacts:
+          path: coverage.out
+          destination: coverage/coverage.out
+      - store_test_results:
+          path: test_results
 # Orchestrate jobs using workflows
 # See: https://circleci.com/docs/workflows/ & https://circleci.com/docs/configuration-reference/#workflows
 workflows:
