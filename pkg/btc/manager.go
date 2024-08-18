@@ -1,4 +1,4 @@
-package ltc
+package btc
 
 // import (
 // 	"bytes"
@@ -11,13 +11,13 @@ package ltc
 // 	"github.com/mselser95/blockchain/pkg/utils"
 // )
 
-// // Manager is a manager for interacting with the Litecoin blockchain.
+// // Manager is a manager for interacting with the Bitcoin blockchain.
 // type Manager struct {
 // 	rpcURL string
 // 	signer signer.TransactionSigner
 // }
 
-// // Connect establishes a connection to the Litecoin node.
+// // Connect establishes a connection to the Bitcoin node.
 // func (m *Manager) Connect(url string) error {
 // 	m.rpcURL = url
 // 	return nil
@@ -26,20 +26,21 @@ package ltc
 // // GetBalance retrieves the balance of the specified address.
 // func (m *Manager) GetBalance(address string, token *utils.Token) (*big.Int, error) {
 // 	if token.Type != utils.Native {
-// 		return nil, errors.New("unsupported token type for Litecoin")
+// 		return nil, errors.New("unsupported token type for Bitcoin")
 // 	}
 
-// 	// Litecoin, like Bitcoin, does not directly support querying balance by address via JSON-RPC.
+// 	// Bitcoin does not directly support querying balance by address via JSON-RPC.
+// 	// You may need to implement this using a third-party service or additional logic.
 // 	return nil, errors.New("not implemented")
 // }
 
-// // ReadCall performs a read-only call on the Litecoin blockchain.
+// // ReadCall performs a read-only call on the Bitcoin blockchain.
 // func (m *Manager) ReadCall(tx *utils.Transaction) (interface{}, error) {
-// 	// Litecoin does not typically support read-only contract calls.
+// 	// Bitcoin does not typically support read-only contract calls.
 // 	return nil, errors.New("unsupported method")
 // }
 
-// // SendTransaction signs and sends a transaction to the Litecoin network.
+// // SendTransaction signs and sends a transaction to the Bitcoin network.
 // func (m *Manager) SendTransaction(tx *utils.Transaction) (string, error) {
 // 	if m.signer == nil {
 // 		return "", errors.New("transaction signer is not set")
@@ -51,7 +52,7 @@ package ltc
 // 		return "", err
 // 	}
 
-// 	// Send the signed transaction to the Litecoin network via RPC
+// 	// Send the signed transaction to the Bitcoin network via RPC
 // 	txHex := signedTx.Payload["signedTx"].(string)
 // 	reqBody, err := json.Marshal(map[string]interface{}{
 // 		"jsonrpc": "1.0",
@@ -111,18 +112,18 @@ package ltc
 // 	txData := respData["result"].(map[string]interface{})
 
 // 	// Process the transaction data and convert it to the TransactionDetails format
-// 	// Here you would need to parse the data according to the LTC JSON-RPC format
+// 	// Here you would need to parse the data according to the BTC JSON-RPC format
 // 	details := &utils.TransactionDetails{
 // 		ID:          txID,
-// 		Status:      "confirmed", // Litecoin doesn't directly provide status, assumed confirmed
+// 		Status:      "confirmed", // Bitcoin doesn't directly provide status, assumed confirmed
 // 		BlockNumber: uint64(txData["blockheight"].(float64)),
 // 		Timestamp:   txData["time"].(float64), // Convert to time.Time if needed
 // 		From:        "",                       // Parsing inputs to determine the sender
 // 		To:          "",                       // Parsing outputs to determine the recipient
 // 		Amount:      big.NewInt(int64(txData["vout"].([]interface{})[0].(map[string]interface{})["value"].(float64) * 1e8)),
-// 		Fee:         nil, // Litecoin fees can be calculated from the difference between inputs and outputs
-// 		Logs:        nil, // No logs in Litecoin transactions
-// 		Events:      nil, // No events in Litecoin transactions
+// 		Fee:         nil, // Bitcoin fees can be calculated from the difference between inputs and outputs
+// 		Logs:        nil, // No logs in Bitcoin transactions
+// 		Events:      nil, // No events in Bitcoin transactions
 // 	}
 
 // 	return details, nil
