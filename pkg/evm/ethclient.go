@@ -32,6 +32,7 @@ type ClientInterface interface {
 	CodeAtHash(ctx context.Context, account common.Address, blockHash common.Hash) ([]byte, error)
 	NonceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (uint64, error)
 	NonceAtHash(ctx context.Context, account common.Address, blockHash common.Hash) (uint64, error)
+	HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error)
 
 	// Pending State
 	PendingBalanceAt(ctx context.Context, account common.Address) (*big.Int, error)

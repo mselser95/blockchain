@@ -4,7 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
 	"math/big"
+	"strings"
 
 	"github.com/mselser95/blockchain/pkg/manager"
 	"github.com/mselser95/blockchain/pkg/signer"
@@ -16,7 +20,7 @@ type Manager struct {
 	url           string
 	client        ClientInterface
 	signer        signer.TransactionSigner
-	clientFactory ClientFactory // Use the factory interface
+	clientFactory ClientFactory
 }
 
 // NewManager creates a new Manager instance.
@@ -41,10 +45,6 @@ func (m *Manager) Start(ctx context.Context) error {
 			if errors.Is(ctx.Err(), context.Canceled) {
 				return fmt.Errorf("connection to EVM client at %s was canceled: %w", m.url, ctx.Err())
 			}
-			// Check if the error is related to context deadline exceeded
-			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				return fmt.Errorf("connection to EVM client at %s timed out: %w", m.url, ctx.Err())
-			}
 			// For other types of errors, wrap them with additional context
 			return fmt.Errorf("unable to connect to EVM client at %s: %w", m.url, err)
 		}
@@ -64,17 +64,79 @@ func (m *Manager) Stop(ctx context.Context) error {
 }
 
 // GetBalance retrieves the balance of the specified address for a given token.
-func (m *Manager) GetBalance(ctx context.Context, address string, token *utils.Token) (*big.Int, error) {
-	return nil, utils.ErrNotImplemented
+func (m *Manager) GetBalance(ctx context.Context, address utils.Address, token utils.Token) (*big.Int, error) {
+	if m.client == nil {
+		return nil, utils.ErrClientNotStarted
+	}
+
+	switch token.Type {
+	case utils.Native:
+		return m.getNativeBalance(ctx, address)
+	case utils.ERC20:
+		return m.getERC20Balance(ctx, address, token)
+	default:
+		return nil, fmt.Errorf("unsupported token type: %v", token.Type)
+	}
+}
+
+func (m *Manager) getNativeBalance(ctx context.Context, address utils.Address) (*big.Int, error) {
+	balance, err := m.client.BalanceAt(ctx, common.HexToAddress(address.String()), nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get native token balance: %w", err)
+	}
+	return balance, nil
+}
+
+func (m *Manager) getERC20Balance(ctx context.Context, address utils.Address, token utils.Token) (*big.Int, error) {
+	if m.client == nil {
+		return nil, utils.ErrClientNotStarted
+	}
+
+	// Parse the ABI
+	parsedABI, err := abi.JSON(strings.NewReader(erc20Abi))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse ERC20 ABI: %w", err)
+	}
+
+	// Prepare the input parameters
+	tokenAddress := *token.Address
+	contractAddress := common.HexToAddress(tokenAddress.String())
+	tokenOwner := common.HexToAddress(address.String())
+
+	// Pack the input parameters to match the "balanceOf" function in the ABI
+	input, err := parsedABI.Pack("balanceOf", tokenOwner)
+	if err != nil {
+		return nil, fmt.Errorf("failed to pack parameters for balanceOf: %w", err)
+	}
+
+	// Call the contract
+	msg := ethereum.CallMsg{
+		To:   &contractAddress,
+		Data: input,
+	}
+
+	output, err := m.client.CallContract(ctx, msg, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to call balanceOf: %w", err)
+	}
+
+	// Unpack the output
+	var balance *big.Int
+	err = parsedABI.UnpackIntoInterface(&balance, "balanceOf", output)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unpack balanceOf result: %w", err)
+	}
+
+	return balance, nil
 }
 
 // ReadCall performs a read-only call to a contract on the EVM blockchain.
-func (m *Manager) ReadCall(ctx context.Context, tx *utils.Transaction) (interface{}, error) {
+func (m *Manager) ReadCall(ctx context.Context, tx utils.Transaction) (interface{}, error) {
 	return nil, utils.ErrNotImplemented
 }
 
 // SendTransaction signs and sends a transaction to the EVM blockchain.
-func (m *Manager) SendTransaction(ctx context.Context, tx *utils.Transaction) (string, error) {
+func (m *Manager) SendTransaction(ctx context.Context, tx utils.Transaction) (string, error) {
 	return "", utils.ErrNotImplemented
 }
 

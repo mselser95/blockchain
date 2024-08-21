@@ -19,7 +19,7 @@ type Token struct {
 	// Type of the token (e.g., Native, ERC20, SPLToken, CosmosDenom)
 	Type TokenType
 	// Address or identifier of the token (contract address, mint address, denomination)
-	Address string
+	Address *Address
 	// Human-readable name of the token
 	Name string
 	// Symbol of the token (e.g., ETH, SOL, ATOM)

@@ -11,8 +11,8 @@ import (
 type BlockchainManager interface {
 	Start(ctx context.Context) error
 	Stop(ctx context.Context) error
-	GetBalance(ctx context.Context, address string, token *utils.Token) (*big.Int, error)
-	ReadCall(ctx context.Context, tx *utils.Transaction) (interface{}, error)
-	SendTransaction(ctx context.Context, tx *utils.Transaction) (string, error)
+	GetBalance(ctx context.Context, address utils.Address, token utils.Token) (*big.Int, error)
+	ReadCall(ctx context.Context, tx utils.Transaction) (interface{}, error)
+	SendTransaction(ctx context.Context, tx utils.Transaction) (string, error)
 	GetTransactionDetails(ctx context.Context, txID string) (*utils.TransactionDetails, error)
 }

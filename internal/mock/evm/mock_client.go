@@ -261,6 +261,21 @@ func (mr *MockClientInterfaceMockRecorder) FilterLogs(ctx, q interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FilterLogs", reflect.TypeOf((*MockClientInterface)(nil).FilterLogs), ctx, q)
 }
 
+// HeaderByNumber mocks base method.
+func (m *MockClientInterface) HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HeaderByNumber", ctx, number)
+	ret0, _ := ret[0].(*types.Header)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HeaderByNumber indicates an expected call of HeaderByNumber.
+func (mr *MockClientInterfaceMockRecorder) HeaderByNumber(ctx, number interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HeaderByNumber", reflect.TypeOf((*MockClientInterface)(nil).HeaderByNumber), ctx, number)
+}
+
 // NetworkID mocks base method.
 func (m *MockClientInterface) NetworkID(ctx context.Context) (*big.Int, error) {
 	m.ctrl.T.Helper()

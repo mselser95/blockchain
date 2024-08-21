@@ -34,15 +34,13 @@ const (
 // Transaction represents an abstract transaction on a blockchain network.
 type Transaction struct {
 	// Transaction ID or hash
-	ID string
+	Hash TxHash
 	// Sender address
-	From string
+	From Address
 	// Receiver address
-	To string
+	To Address
 	// Amount to be transferred
 	Amount *big.Int
-	// Token identifier (e.g., token contract address or denomination)
-	Token string
 	// Type of the transaction (e.g., transfer, contract call)
 	Type TransactionType
 	// Current status of the transaction

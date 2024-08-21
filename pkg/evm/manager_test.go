@@ -3,13 +3,16 @@ package evm_test
 import (
 	"context"
 	"errors"
+	"github.com/ethereum/go-ethereum/common"
+	"math/big"
 	"testing"
 	"time"
+
+	"github.com/mselser95/blockchain/pkg/evm"
 
 	"github.com/golang/mock/gomock"
 	mock_evm "github.com/mselser95/blockchain/internal/mock/evm"
 	mock_signer "github.com/mselser95/blockchain/internal/mock/signer"
-	"github.com/mselser95/blockchain/pkg/evm"
 	"github.com/mselser95/blockchain/pkg/utils"
 	"github.com/stretchr/testify/assert"
 )
@@ -95,6 +98,7 @@ func TestManager_Start_DeadlineExceeded(t *testing.T) {
 	// Create a context with a very short deadline
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 	defer cancel()
+	time.Sleep(2 * time.Millisecond)
 
 	// Expect the factory to be called and simulate an error due to the deadline being exceeded
 	mockClientFactory.EXPECT().DialContext(gomock.Any(), "http://localhost:8545").Return(nil, context.DeadlineExceeded)
@@ -193,4 +197,93 @@ func TestManager_Stop_CanceledContext(t *testing.T) {
 	// Test the Stop method with a canceled context
 	err := manager.Stop(ctx)
 	assert.NoError(t, err)
+}
+
+// TestManager_GetBalance_Native_Success tests the GetBalance method for a native token (e.g., ETH).
+func TestManager_GetBalance_Native_Success(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockClient := mock_evm.NewMockClientInterface(ctrl)
+	mockClientFactory := mock_evm.NewMockClientFactory(ctrl)
+	mockSigner := mock_signer.NewMockTransactionSigner(ctrl)
+	mockClientFactory.EXPECT().DialContext(gomock.Any(), "http://localhost:8545").Return(mockClient, nil)
+
+	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory)
+
+	// Start the manager to initialize the client
+	manager.Start(context.Background())
+
+	address, err := evm.NewAddress("0x32Be343B94f860124dC4fEe278FDCBD38C102D88", utils.Ethereum)
+	assert.NoError(t, err)
+
+	mockClient.EXPECT().BalanceAt(gomock.Any(), common.HexToAddress(address.String()), nil).
+		Return(big.NewInt(1000000000000000000), nil)
+
+	token := utils.Token{Type: utils.Native, Symbol: "ETH"}
+
+	balance, err := manager.GetBalance(context.Background(), address, token)
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(1000000000000000000), balance)
+}
+
+// TestManager_GetBalance_ERC20_Success tests the GetBalance method for an ERC20 token.
+func TestManager_GetBalance_ERC20_Success(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockClient := mock_evm.NewMockClientInterface(ctrl)
+	mockClientFactory := mock_evm.NewMockClientFactory(ctrl)
+	mockSigner := mock_signer.NewMockTransactionSigner(ctrl)
+	mockClientFactory.EXPECT().DialContext(gomock.Any(), "http://localhost:8545").Return(mockClient, nil)
+
+	balanceExpected := big.NewInt(1000000000000000000)
+
+	// Convert to a 32-byte array (padded with zeros at the start)
+	output := common.LeftPadBytes(balanceExpected.Bytes(), 32)
+
+	mockClient.EXPECT().CallContract(gomock.Any(), gomock.Any(), gomock.Any()).Return(output, nil)
+
+	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory)
+
+	// Start the manager to initialize the client
+	manager.Start(context.Background())
+
+	address, err := evm.NewAddress("0x32Be343B94f860124dC4fEe278FDCBD38C102D88", utils.Ethereum)
+	assert.NoError(t, err)
+
+	tokenAddress, err := evm.NewAddress("0x6B175474E89094C44Da98b954EedeAC495271d0F", utils.Ethereum)
+	assert.NoError(t, err)
+
+	token := utils.Token{Type: utils.ERC20, Address: &tokenAddress, Symbol: "DAI"}
+
+	balance, err := manager.GetBalance(context.Background(), address, token)
+	assert.NoError(t, err)
+	assert.Equal(t, balanceExpected, balance)
+}
+
+// TestManager_GetBalance_UnsupportedToken tests the GetBalance method for an unsupported token type.
+func TestManager_GetBalance_UnsupportedToken(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockClientFactory := mock_evm.NewMockClientFactory(ctrl)
+	mockSigner := mock_signer.NewMockTransactionSigner(ctrl)
+	mockClient := mock_evm.NewMockClientInterface(ctrl)
+	mockClientFactory.EXPECT().DialContext(gomock.Any(), "http://localhost:8545").Return(mockClient, nil)
+
+	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory)
+
+	address, err := evm.NewAddress("0x32Be343B94f860124dC4fEe278FDCBD38C102D88", utils.Ethereum)
+	assert.NoError(t, err)
+
+	err = manager.Start(context.Background())
+	assert.NoError(t, err)
+
+	token := utils.Token{Type: utils.CosmosDenom, Symbol: "ATOM"}
+
+	balance, err := manager.GetBalance(context.Background(), address, token)
+	assert.Error(t, err)
+	assert.Nil(t, balance)
+	assert.Contains(t, err.Error(), "unsupported token type")
 }
