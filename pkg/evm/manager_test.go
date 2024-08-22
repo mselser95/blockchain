@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"math/big"
 	"testing"
 	"time"
@@ -57,7 +58,7 @@ func TestManager_Start_AlreadyStarted(t *testing.T) {
 	err := manager.Start(context.Background())
 	assert.NoError(t, err)
 	err = manager.Start(context.Background())
-	assert.ErrorIs(t, err, utils.ErrAlreadyStarted)
+	assert.ErrorContains(t, err, utils.ErrAlreadyStarted)
 }
 
 // To run this specific test from the root directory with coverage and verbosity:
@@ -168,7 +169,7 @@ func TestManager_Stop_NoClient(t *testing.T) {
 
 	// Test the Stop method when there is no client (i.e., manager was never started)
 	err := manager.Stop(context.Background())
-	assert.Equal(t, utils.ErrClientNotStarted, err)
+	assert.ErrorContains(t, err, utils.ErrClientNotStarted)
 }
 
 // To run this specific test from the root directory with coverage and verbosity:
@@ -200,6 +201,7 @@ func TestManager_Stop_CanceledContext(t *testing.T) {
 }
 
 // TestManager_GetBalance_Native_Success tests the GetBalance method for a native token (e.g., ETH).
+// go test -v -cover ./pkg/evm -run TestManager_GetBalance_Native_Success
 func TestManager_GetBalance_Native_Success(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -228,6 +230,7 @@ func TestManager_GetBalance_Native_Success(t *testing.T) {
 }
 
 // TestManager_GetBalance_ERC20_Success tests the GetBalance method for an ERC20 token.
+// go test -v -cover ./pkg/evm -run TestManager_GetBalance_ERC20_Success
 func TestManager_GetBalance_ERC20_Success(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -263,6 +266,7 @@ func TestManager_GetBalance_ERC20_Success(t *testing.T) {
 }
 
 // TestManager_GetBalance_UnsupportedToken tests the GetBalance method for an unsupported token type.
+// go test -v -cover ./pkg/evm -run TestManager_GetBalance_UnsupportedToken
 func TestManager_GetBalance_UnsupportedToken(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -285,5 +289,169 @@ func TestManager_GetBalance_UnsupportedToken(t *testing.T) {
 	balance, err := manager.GetBalance(context.Background(), address, token)
 	assert.Error(t, err)
 	assert.Nil(t, balance)
-	assert.Contains(t, err.Error(), "unsupported token type")
+	assert.ErrorContains(t, err, utils.ErrUnsupportedTokenType)
+}
+
+// TestMangaer_SendTransaction_ClientNotStarted tests the SendTransaction method when the client is not started.
+// go test -v -cover ./pkg/evm -run TestManager_SendTransaction_ClientNotStarted
+func TestManager_SendTransaction_ClientNotStarted(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockClientFactory := mock_evm.NewMockClientFactory(ctrl)
+	mockSigner := mock_signer.NewMockTransactionSigner(ctrl)
+
+	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory)
+
+	_, err := manager.SendTransaction(context.Background(), &evm.BaseTransaction{})
+	assert.ErrorContains(t, err, utils.ErrClientNotStarted)
+
+}
+
+// TestManager_SendTransaction_InsufficientFunds tests the SendTransaction method when there are insufficient funds.
+// go test -v -cover ./pkg/evm -run TestManager_SendTransaction_InsufficientFunds
+func TestManager_SendTransaction_InsufficientFunds(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockClient := mock_evm.NewMockClientInterface(ctrl)
+	mockClientFactory := mock_evm.NewMockClientFactory(ctrl)
+	mockSigner := mock_signer.NewMockTransactionSigner(ctrl)
+
+	// Set up the manager and start the client
+	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory)
+	mockClientFactory.EXPECT().DialContext(gomock.Any(), "http://localhost:8545").Return(mockClient, nil)
+	manager.Start(context.Background())
+
+	// Create a mock signed transaction
+	signedTx := types.NewTransaction(1, common.HexToAddress("0x0"), big.NewInt(1000), 21000, big.NewInt(50), nil)
+	signedTxPayload := map[string]interface{}{
+		"signedTransaction": signedTx,
+	}
+
+	tx := &evm.BaseTransaction{
+		TxPayload: signedTxPayload,
+	}
+	mockSigner.EXPECT().SignTransaction(gomock.Any()).Return(tx, nil)
+
+	clientError := errors.New("insufficient funds for gas * price + value")
+	mockClient.EXPECT().SendTransaction(gomock.Any(), signedTx).Return(clientError)
+
+	// Act
+	txHash, err := manager.SendTransaction(context.Background(), tx)
+
+	// Assert
+	assert.Empty(t, txHash)
+	assert.ErrorContains(t, err, utils.ErrEVMInsufficientFunds)
+}
+
+// TestManager_SendTransaction_ExceedsBlockGasLimit tests the SendTransaction method when the gas limit exceeds the block's maximum.
+// go test -v -cover ./pkg/evm -run TestManager_SendTransaction_ExceedsBlockGasLimit
+func TestManager_SendTransaction_ExceedsBlockGasLimit(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockClient := mock_evm.NewMockClientInterface(ctrl)
+	mockClientFactory := mock_evm.NewMockClientFactory(ctrl)
+	mockSigner := mock_signer.NewMockTransactionSigner(ctrl)
+
+	// Set up the manager and start the client
+	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory)
+	mockClientFactory.EXPECT().DialContext(gomock.Any(), "http://localhost:8545").Return(mockClient, nil)
+	manager.Start(context.Background())
+
+	// Create a mock signed transaction
+	signedTx := types.NewTransaction(1, common.HexToAddress("0x0"), big.NewInt(1000), 21000, big.NewInt(50), nil)
+	signedTxPayload := map[string]interface{}{
+		"signedTransaction": signedTx,
+	}
+
+	tx := &evm.BaseTransaction{
+		TxPayload: signedTxPayload,
+	}
+	mockSigner.EXPECT().SignTransaction(gomock.Any()).Return(tx, nil)
+
+	clientError := errors.New("exceeds block gas limit")
+	mockClient.EXPECT().SendTransaction(gomock.Any(), signedTx).Return(clientError)
+
+	// Act
+	txHash, err := manager.SendTransaction(context.Background(), tx)
+
+	// Assert
+	assert.Empty(t, txHash)
+	assert.ErrorContains(t, err, utils.ErrEVMMaxGasCapExceeded)
+}
+
+// TestManager_SendTransaction_ReplacementUnderpriced tests the SendTransaction method when the replacement transaction is underpriced.
+// go test -v -cover ./pkg/evm -run TestManager_SendTransaction_ReplacementUnderpriced
+func TestManager_SendTransaction_ReplacementUnderpriced(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockClient := mock_evm.NewMockClientInterface(ctrl)
+	mockClientFactory := mock_evm.NewMockClientFactory(ctrl)
+	mockSigner := mock_signer.NewMockTransactionSigner(ctrl)
+
+	// Set up the manager and start the client
+	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory)
+	mockClientFactory.EXPECT().DialContext(gomock.Any(), "http://localhost:8545").Return(mockClient, nil)
+	manager.Start(context.Background())
+
+	// Create a mock signed transaction
+	signedTx := types.NewTransaction(1, common.HexToAddress("0x0"), big.NewInt(1000), 21000, big.NewInt(50), nil)
+	signedTxPayload := map[string]interface{}{
+		"signedTransaction": signedTx,
+	}
+
+	tx := &evm.BaseTransaction{
+		TxPayload: signedTxPayload,
+	}
+	mockSigner.EXPECT().SignTransaction(gomock.Any()).Return(tx, nil)
+
+	clientError := errors.New("replacement transaction underpriced")
+	mockClient.EXPECT().SendTransaction(gomock.Any(), signedTx).Return(clientError)
+
+	// Act
+	txHash, err := manager.SendTransaction(context.Background(), tx)
+
+	// Assert
+	assert.Empty(t, txHash)
+	assert.ErrorContains(t, err, utils.ErrEVMReplacementUnderpriced)
+}
+
+// TestManager_SendTransaction_NonceTooLow tests the SendTransaction method when the transaction nonce is too low.
+// go test -v -cover ./pkg/evm -run TestManager_SendTransaction_NonceTooLow
+func TestManager_SendTransaction_NonceTooLow(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockClient := mock_evm.NewMockClientInterface(ctrl)
+	mockClientFactory := mock_evm.NewMockClientFactory(ctrl)
+	mockSigner := mock_signer.NewMockTransactionSigner(ctrl)
+
+	// Set up the manager and start the client
+	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory)
+	mockClientFactory.EXPECT().DialContext(gomock.Any(), "http://localhost:8545").Return(mockClient, nil)
+	manager.Start(context.Background())
+
+	// Create a mock signed transaction
+	signedTx := types.NewTransaction(1, common.HexToAddress("0x0"), big.NewInt(1000), 21000, big.NewInt(50), nil)
+	signedTxPayload := map[string]interface{}{
+		"signedTransaction": signedTx,
+	}
+
+	tx := &evm.BaseTransaction{
+		TxPayload: signedTxPayload,
+	}
+	mockSigner.EXPECT().SignTransaction(gomock.Any()).Return(tx, nil)
+
+	clientError := errors.New("nonce too low")
+	mockClient.EXPECT().SendTransaction(gomock.Any(), signedTx).Return(clientError)
+
+	// Act
+	txHash, err := manager.SendTransaction(context.Background(), tx)
+
+	// Assert
+	assert.Empty(t, txHash)
+	assert.ErrorContains(t, err, utils.ErrEVMNonceTooLow)
 }

@@ -31,26 +31,32 @@ const (
 	Failed
 )
 
-// Transaction represents an abstract transaction on a blockchain network.
-type Transaction struct {
-	// Transaction ID or hash
-	Hash TxHash
-	// Sender address
-	From Address
-	// Receiver address
-	To Address
-	// Amount to be transferred
-	Amount *big.Int
-	// Type of the transaction (e.g., transfer, contract call)
-	Type TransactionType
-	// Current status of the transaction
-	Status TransactionStatus
-	// Transaction fee
-	Fee *big.Int
-	// Timestamp of the transaction
-	Timestamp time.Time
-	// Block number where the transaction was included
-	BlockNumber uint64
-	// Additional data specific to the transaction type or blockchain
-	Payload map[string]interface{}
+// Transaction defines the interface for a blockchain transaction.
+type Transaction interface {
+	Hash() *TxHash
+	From() Address
+	To() Address
+	Amount() *big.Int
+	Type() *TransactionType
+	Payload() map[string]interface{}
+
+	Status() *TransactionStatus
+	Timestamp() *time.Time
+	BlockNumber() *uint64
+	SignedTx() []byte
+
+	// Validate checks if the transaction fields are valid.
+	Validate() error
+
+	// SetStatus updates the transaction status.
+	SetStatus(status TransactionStatus)
+
+	// SetBlockNumber updates the block number where the transaction was included.
+	SetBlockNumber(blockNumber uint64)
+
+	// SetSignedTx updates the signed transaction.
+	SetSignedTx(signedTx []byte)
+
+	// SetPayload updates the transaction payload.
+	SetPayload(key string, value interface{})
 }

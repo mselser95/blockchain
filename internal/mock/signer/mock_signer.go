@@ -35,10 +35,10 @@ func (m *MockTransactionSigner) EXPECT() *MockTransactionSignerMockRecorder {
 }
 
 // SignTransaction mocks base method.
-func (m *MockTransactionSigner) SignTransaction(tx *utils.Transaction) (*utils.Transaction, error) {
+func (m *MockTransactionSigner) SignTransaction(tx utils.Transaction) (utils.Transaction, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SignTransaction", tx)
-	ret0, _ := ret[0].(*utils.Transaction)
+	ret0, _ := ret[0].(utils.Transaction)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

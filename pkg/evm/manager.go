@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"math/big"
 	"strings"
 
@@ -51,7 +52,7 @@ func (m *Manager) Start(ctx context.Context) error {
 		m.client = c
 		return nil
 	}
-	return utils.ErrAlreadyStarted
+	return utils.WrapError(utils.ErrAlreadyStarted)
 }
 
 // Stop stops the Manager and cleans up resources.
@@ -60,13 +61,13 @@ func (m *Manager) Stop(ctx context.Context) error {
 		m.client.Close()
 		return nil
 	}
-	return utils.ErrClientNotStarted
+	return utils.WrapError(utils.ErrClientNotStarted)
 }
 
 // GetBalance retrieves the balance of the specified address for a given token.
 func (m *Manager) GetBalance(ctx context.Context, address utils.Address, token utils.Token) (*big.Int, error) {
 	if m.client == nil {
-		return nil, utils.ErrClientNotStarted
+		return nil, utils.WrapError(utils.ErrClientNotStarted)
 	}
 
 	switch token.Type {
@@ -75,10 +76,71 @@ func (m *Manager) GetBalance(ctx context.Context, address utils.Address, token u
 	case utils.ERC20:
 		return m.getERC20Balance(ctx, address, token)
 	default:
-		return nil, fmt.Errorf("unsupported token type: %v", token.Type)
+		errMsg := fmt.Sprintf("%s: %v", utils.ErrUnsupportedTokenType, token.Type)
+		return nil, utils.WrapError(errMsg)
 	}
 }
 
+// ReadCall performs a read-only call to a contract on the EVM blockchain.
+func (m *Manager) ReadCall(ctx context.Context, tx utils.Transaction) (interface{}, error) {
+	return nil, utils.WrapError(utils.ErrNotImplemented)
+}
+
+// EstimateGas estimates the gas required to execute a transaction on the EVM blockchain.
+func (m *Manager) EstimateGas(ctx context.Context, tx utils.Transaction) (*big.Int, error) {
+	return nil, utils.WrapError(utils.ErrNotImplemented)
+}
+
+// SendTransaction sends a transaction to the EVM blockchain.
+func (m *Manager) SendTransaction(ctx context.Context, tx utils.Transaction) (string, error) {
+	if m.client == nil {
+		return "", utils.WrapError(utils.ErrClientNotStarted)
+	}
+
+	// Sign the transaction using the configured signer
+	signedTx, err := m.signer.SignTransaction(tx)
+	if err != nil {
+		return "", utils.WrapError(utils.ErrEVMFailedToSignTransaction, err)
+	}
+	if signedTx == nil {
+		return "", utils.WrapError(utils.ErrEVMInvalidTransaction)
+	}
+
+	// Deserialize the signed transaction from the transaction payload
+	ethTx, ok := signedTx.Payload()["signedTransaction"].(*types.Transaction)
+	if !ok || ethTx == nil {
+		return "", utils.WrapError(utils.ErrEVMInvalidTransaction)
+	}
+
+	// Send the signed transaction to the Ethereum network
+	err = m.client.SendTransaction(ctx, ethTx)
+	if err != nil {
+		// Handle known errors based on their messages
+		errMsg := err.Error()
+		switch {
+		case strings.Contains(errMsg, "insufficient funds"):
+			return "", utils.WrapError(utils.ErrEVMInsufficientFunds, err)
+		case strings.Contains(errMsg, "exceeds block gas limit"):
+			return "", utils.WrapError(utils.ErrEVMMaxGasCapExceeded, err)
+		case strings.Contains(errMsg, "replacement transaction underpriced"):
+			return "", utils.WrapError(utils.ErrEVMReplacementUnderpriced, err)
+		case strings.Contains(errMsg, "nonce too low"):
+			return "", utils.WrapError(utils.ErrEVMNonceTooLow, err)
+		default:
+			return "", utils.WrapError(utils.ErrEVMFailedToSendTransaction, err)
+		}
+	}
+
+	// Return the transaction hash
+	return ethTx.Hash().Hex(), nil
+}
+
+// GetTransactionDetails retrieves the details of a transaction by its ID.
+func (m *Manager) GetTransactionDetails(ctx context.Context, txID string) (*utils.TransactionDetails, error) {
+	return nil, utils.WrapError(utils.ErrNotImplemented, nil)
+}
+
+// Internal functions:
 func (m *Manager) getNativeBalance(ctx context.Context, address utils.Address) (*big.Int, error) {
 	balance, err := m.client.BalanceAt(ctx, common.HexToAddress(address.String()), nil)
 	if err != nil {
@@ -89,7 +151,7 @@ func (m *Manager) getNativeBalance(ctx context.Context, address utils.Address) (
 
 func (m *Manager) getERC20Balance(ctx context.Context, address utils.Address, token utils.Token) (*big.Int, error) {
 	if m.client == nil {
-		return nil, utils.ErrClientNotStarted
+		return nil, utils.WrapError(utils.ErrClientNotStarted, nil)
 	}
 
 	// Parse the ABI
@@ -128,19 +190,4 @@ func (m *Manager) getERC20Balance(ctx context.Context, address utils.Address, to
 	}
 
 	return balance, nil
-}
-
-// ReadCall performs a read-only call to a contract on the EVM blockchain.
-func (m *Manager) ReadCall(ctx context.Context, tx utils.Transaction) (interface{}, error) {
-	return nil, utils.ErrNotImplemented
-}
-
-// SendTransaction signs and sends a transaction to the EVM blockchain.
-func (m *Manager) SendTransaction(ctx context.Context, tx utils.Transaction) (string, error) {
-	return "", utils.ErrNotImplemented
-}
-
-// GetTransactionDetails retrieves the details of a transaction by its ID.
-func (m *Manager) GetTransactionDetails(ctx context.Context, txID string) (*utils.TransactionDetails, error) {
-	return nil, utils.ErrNotImplemented
 }
