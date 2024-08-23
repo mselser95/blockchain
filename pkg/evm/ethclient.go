@@ -50,6 +50,10 @@ type ClientInterface interface {
 	FeeHistory(ctx context.Context, blockCount uint64, lastBlock *big.Int, rewardPercentiles []float64) (*ethereum.FeeHistory, error)
 	EstimateGas(ctx context.Context, msg ethereum.CallMsg) (uint64, error)
 
+	// Transaction Access
+	TransactionByHash(ctx context.Context, txHash common.Hash) (*types.Transaction, bool, error)
+	TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
+
 	// Transaction Sending
 	SendTransaction(ctx context.Context, tx *types.Transaction) error
 

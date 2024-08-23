@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"math/big"
 	"testing"
 	"time"
@@ -17,6 +18,32 @@ import (
 	"github.com/mselser95/blockchain/pkg/utils"
 	"github.com/stretchr/testify/assert"
 )
+
+func generateSignedTransaction(t *testing.T, toAddress common.Address, chainID *big.Int) (*types.Transaction, common.Address) {
+	// Generate a random private key
+	privateKey, err := crypto.GenerateKey()
+	assert.NoError(t, err)
+
+	// Get the public key and derive the sender address
+	fromAddress := crypto.PubkeyToAddress(privateKey.PublicKey)
+
+	// Create a transaction
+	tx := types.NewTransaction(
+		1,                // Nonce (should be dynamically fetched in real scenarios)
+		toAddress,        // Recipient address
+		big.NewInt(1000), // Value in wei (smallest unit of ETH)
+		21000,            // Gas limit
+		big.NewInt(50),   // Gas price in wei
+		nil,              // Data (can be nil for a simple transfer)
+	)
+
+	// Sign the transaction
+	signer := types.NewEIP155Signer(chainID)
+	signedTx, err := types.SignTx(tx, signer, privateKey)
+	assert.NoError(t, err)
+
+	return signedTx, fromAddress
+}
 
 // To run all tests in this file from the root directory with coverage and verbosity:
 // go test -cover ./pkg/evm
@@ -34,7 +61,7 @@ func TestManager_Start_Success(t *testing.T) {
 	// Expect the factory to dial and return the mock client
 	mockClientFactory.EXPECT().DialContext(gomock.Any(), "http://localhost:8545").Return(mockClient, nil)
 
-	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory)
+	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory, utils.Ethereum)
 
 	// Test the Start method with a successful connection
 	err := manager.Start(context.Background())
@@ -52,7 +79,7 @@ func TestManager_Start_AlreadyStarted(t *testing.T) {
 	mockClient := mock_evm.NewMockClientInterface(ctrl)
 	mockClientFactory.EXPECT().DialContext(gomock.Any(), "http://localhost:8545").Return(mockClient, nil)
 
-	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory)
+	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory, utils.Ethereum)
 
 	// Test the Start method when the manager is already started
 	err := manager.Start(context.Background())
@@ -70,7 +97,7 @@ func TestManager_Start_CancelledContext(t *testing.T) {
 	mockClientFactory := mock_evm.NewMockClientFactory(ctrl)
 	mockSigner := mock_signer.NewMockTransactionSigner(ctrl)
 
-	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory)
+	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory, utils.Ethereum)
 
 	// Create a context that is already cancelled
 	ctx, cancel := context.WithCancel(context.Background())
@@ -94,7 +121,7 @@ func TestManager_Start_DeadlineExceeded(t *testing.T) {
 	mockClientFactory := mock_evm.NewMockClientFactory(ctrl)
 	mockSigner := mock_signer.NewMockTransactionSigner(ctrl)
 
-	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory)
+	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory, utils.Ethereum)
 
 	// Create a context with a very short deadline
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
@@ -119,7 +146,7 @@ func TestManager_Start_DialError(t *testing.T) {
 	mockClientFactory := mock_evm.NewMockClientFactory(ctrl)
 	mockSigner := mock_signer.NewMockTransactionSigner(ctrl)
 
-	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory)
+	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory, utils.Ethereum)
 
 	// Simulate a network error during the connection attempt
 	dialError := errors.New("network error")
@@ -143,7 +170,7 @@ func TestManager_Stop_Success(t *testing.T) {
 	mockSigner := mock_signer.NewMockTransactionSigner(ctrl)
 	mockClientFactory.EXPECT().DialContext(gomock.Any(), "http://localhost:8545").Return(mockClient, nil)
 
-	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory)
+	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory, utils.Ethereum)
 
 	// Start the manager to initialize the client
 	manager.Start(context.Background())
@@ -165,7 +192,7 @@ func TestManager_Stop_NoClient(t *testing.T) {
 	mockClientFactory := mock_evm.NewMockClientFactory(ctrl)
 	mockSigner := mock_signer.NewMockTransactionSigner(ctrl)
 
-	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory)
+	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory, utils.Ethereum)
 
 	// Test the Stop method when there is no client (i.e., manager was never started)
 	err := manager.Stop(context.Background())
@@ -183,7 +210,7 @@ func TestManager_Stop_CanceledContext(t *testing.T) {
 	mockSigner := mock_signer.NewMockTransactionSigner(ctrl)
 	mockClientFactory.EXPECT().DialContext(gomock.Any(), "http://localhost:8545").Return(mockClient, nil)
 
-	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory)
+	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory, utils.Ethereum)
 
 	// Start the manager to initialize the client
 	manager.Start(context.Background())
@@ -211,7 +238,7 @@ func TestManager_GetBalance_Native_Success(t *testing.T) {
 	mockSigner := mock_signer.NewMockTransactionSigner(ctrl)
 	mockClientFactory.EXPECT().DialContext(gomock.Any(), "http://localhost:8545").Return(mockClient, nil)
 
-	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory)
+	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory, utils.Ethereum)
 
 	// Start the manager to initialize the client
 	manager.Start(context.Background())
@@ -247,7 +274,7 @@ func TestManager_GetBalance_ERC20_Success(t *testing.T) {
 
 	mockClient.EXPECT().CallContract(gomock.Any(), gomock.Any(), gomock.Any()).Return(output, nil)
 
-	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory)
+	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory, utils.Ethereum)
 
 	// Start the manager to initialize the client
 	manager.Start(context.Background())
@@ -276,7 +303,7 @@ func TestManager_GetBalance_UnsupportedToken(t *testing.T) {
 	mockClient := mock_evm.NewMockClientInterface(ctrl)
 	mockClientFactory.EXPECT().DialContext(gomock.Any(), "http://localhost:8545").Return(mockClient, nil)
 
-	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory)
+	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory, utils.Ethereum)
 
 	address, err := evm.NewAddress("0x32Be343B94f860124dC4fEe278FDCBD38C102D88", utils.Ethereum)
 	assert.NoError(t, err)
@@ -301,7 +328,7 @@ func TestManager_SendTransaction_ClientNotStarted(t *testing.T) {
 	mockClientFactory := mock_evm.NewMockClientFactory(ctrl)
 	mockSigner := mock_signer.NewMockTransactionSigner(ctrl)
 
-	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory)
+	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory, utils.Ethereum)
 
 	_, err := manager.SendTransaction(context.Background(), &evm.BaseTransaction{})
 	assert.ErrorContains(t, err, utils.ErrClientNotStarted)
@@ -319,7 +346,7 @@ func TestManager_SendTransaction_InsufficientFunds(t *testing.T) {
 	mockSigner := mock_signer.NewMockTransactionSigner(ctrl)
 
 	// Set up the manager and start the client
-	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory)
+	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory, utils.Ethereum)
 	mockClientFactory.EXPECT().DialContext(gomock.Any(), "http://localhost:8545").Return(mockClient, nil)
 	manager.Start(context.Background())
 
@@ -356,7 +383,7 @@ func TestManager_SendTransaction_ExceedsBlockGasLimit(t *testing.T) {
 	mockSigner := mock_signer.NewMockTransactionSigner(ctrl)
 
 	// Set up the manager and start the client
-	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory)
+	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory, utils.Ethereum)
 	mockClientFactory.EXPECT().DialContext(gomock.Any(), "http://localhost:8545").Return(mockClient, nil)
 	manager.Start(context.Background())
 
@@ -393,7 +420,7 @@ func TestManager_SendTransaction_ReplacementUnderpriced(t *testing.T) {
 	mockSigner := mock_signer.NewMockTransactionSigner(ctrl)
 
 	// Set up the manager and start the client
-	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory)
+	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory, utils.Ethereum)
 	mockClientFactory.EXPECT().DialContext(gomock.Any(), "http://localhost:8545").Return(mockClient, nil)
 	manager.Start(context.Background())
 
@@ -430,7 +457,7 @@ func TestManager_SendTransaction_NonceTooLow(t *testing.T) {
 	mockSigner := mock_signer.NewMockTransactionSigner(ctrl)
 
 	// Set up the manager and start the client
-	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory)
+	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory, utils.Ethereum)
 	mockClientFactory.EXPECT().DialContext(gomock.Any(), "http://localhost:8545").Return(mockClient, nil)
 	manager.Start(context.Background())
 
@@ -454,4 +481,124 @@ func TestManager_SendTransaction_NonceTooLow(t *testing.T) {
 	// Assert
 	assert.Empty(t, txHash)
 	assert.ErrorContains(t, err, utils.ErrEVMNonceTooLow)
+}
+
+// TestManager_GetTransactionDetails_Success tests the successful retrieval of transaction details.
+// go test -v -cover ./pkg/evm -run TestManager_GetTransactionDetails_Success
+func TestManager_GetTransactionDetails_Success(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockClient := mock_evm.NewMockClientInterface(ctrl)
+	mockClientFactory := mock_evm.NewMockClientFactory(ctrl)
+	mockSigner := mock_signer.NewMockTransactionSigner(ctrl)
+
+	// Set up the manager and start the client
+	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory, utils.Ethereum)
+	mockClientFactory.EXPECT().DialContext(gomock.Any(), "http://localhost:8545").Return(mockClient, nil)
+	manager.Start(context.Background())
+
+	// Generate random transaction hash, addresses, and other details
+	blockNumber := big.NewInt(123)
+	toAddress := generateRandomAddress()
+
+	// Mock the transaction and receipt
+	tx, from := generateSignedTransaction(t, common.HexToAddress(toAddress.String()), big.NewInt(1))
+	fromAddress, err := evm.NewAddress(from.String(), utils.Ethereum)
+	assert.NoError(t, err)
+	txHash, err := evm.NewTxHash(tx.Hash().Hex(), string(utils.Ethereum))
+	assert.NoError(t, err)
+	mockClient.EXPECT().TransactionByHash(gomock.Any(), common.HexToHash(txHash.String())).Return(tx, false, nil)
+
+	topic := common.HexToHash(generateRandomHash().String())
+
+	receipt := &types.Receipt{
+		Status:      types.ReceiptStatusSuccessful,
+		BlockNumber: blockNumber,
+		Logs: []*types.Log{
+			{
+				Address:     common.HexToAddress(fromAddress.String()),
+				Topics:      []common.Hash{topic},
+				Data:        []byte{0x0},
+				BlockNumber: 123,
+				TxHash:      common.HexToHash(txHash.String()),
+				Index:       0,
+			},
+		},
+		GasUsed: 21000,
+	}
+	mockClient.EXPECT().TransactionReceipt(gomock.Any(), common.HexToHash(txHash.String())).Return(receipt, nil)
+
+	// Act
+	details, err := manager.GetTransactionDetails(context.Background(), txHash.String())
+
+	// Assert
+	assert.NoError(t, err)
+	assert.Equal(t, txHash.String(), details.Hash.String())
+	assert.Equal(t, utils.Confirmed, details.Status)
+	assert.Equal(t, uint64(123), details.BlockNumber)
+	assert.Equal(t, fromAddress.String(), details.From.String())
+	assert.Equal(t, toAddress.String(), details.To.String())
+	assert.Equal(t, big.NewInt(1000), details.Amount)
+	assert.Equal(t, big.NewInt(1050000), details.Fee) // GasPrice (50) * GasUsed (21000)
+	assert.Len(t, details.Logs, 1)
+	assert.Equal(t, fromAddress.String(), details.Logs[0].Addr.String())
+	assert.Equal(t, topic.String(), details.Logs[0].Topics[0])
+}
+
+// TestManager_GetTransactionDetails_TransactionNotFound tests when the transaction is not found.
+// go test -v -cover ./pkg/evm -run TestManager_GetTransactionDetails_TransactionNotFound
+func TestManager_GetTransactionDetails_TransactionNotFound(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockClient := mock_evm.NewMockClientInterface(ctrl)
+	mockClientFactory := mock_evm.NewMockClientFactory(ctrl)
+	mockSigner := mock_signer.NewMockTransactionSigner(ctrl)
+
+	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory, utils.Ethereum)
+	mockClientFactory.EXPECT().DialContext(gomock.Any(), "http://localhost:8545").Return(mockClient, nil)
+	manager.Start(context.Background())
+
+	txHash := generateRandomHash()
+
+	// Mock the transaction not found scenario
+	mockClient.EXPECT().TransactionByHash(gomock.Any(), common.HexToHash(txHash.String())).Return(nil, false, errors.New("not found"))
+
+	// Act
+	details, err := manager.GetTransactionDetails(context.Background(), txHash.String())
+
+	// Assert
+	assert.Nil(t, details)
+	assert.ErrorContains(t, err, utils.ErrEVMFailedToRetrieveTransaction)
+}
+
+// TestManager_GetTransactionDetails_ReceiptNotFound tests when the receipt is not found.
+// go test -v -cover ./pkg/evm -run TestManager_GetTransactionDetails_ReceiptNotFound
+func TestManager_GetTransactionDetails_ReceiptNotFound(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockClient := mock_evm.NewMockClientInterface(ctrl)
+	mockClientFactory := mock_evm.NewMockClientFactory(ctrl)
+	mockSigner := mock_signer.NewMockTransactionSigner(ctrl)
+
+	manager := evm.NewManager("http://localhost:8545", mockSigner, mockClientFactory, utils.Ethereum)
+	mockClientFactory.EXPECT().DialContext(gomock.Any(), "http://localhost:8545").Return(mockClient, nil)
+	manager.Start(context.Background())
+
+	txHash := generateRandomHash()
+	toAddress := generateRandomAddress()
+
+	// Mock the transaction and a missing receipt scenario
+	tx := types.NewTransaction(1, common.HexToAddress(toAddress.String()), big.NewInt(1000), 21000, big.NewInt(50), nil)
+	mockClient.EXPECT().TransactionByHash(gomock.Any(), common.HexToHash(txHash.String())).Return(tx, false, nil)
+	mockClient.EXPECT().TransactionReceipt(gomock.Any(), common.HexToHash(txHash.String())).Return(nil, errors.New("not found"))
+
+	// Act
+	details, err := manager.GetTransactionDetails(context.Background(), txHash.String())
+
+	// Assert
+	assert.Nil(t, details)
+	assert.ErrorContains(t, err, utils.ErrEVMFailedToRetrieveTransaction)
 }

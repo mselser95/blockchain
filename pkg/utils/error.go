@@ -56,4 +56,13 @@ var (
 
 	// ErrEVMInvalidPrivateKey is returned when a private key is invalid.
 	ErrEVMInvalidPrivateKey = "invalid private key"
+
+	// ErrEVMFailedToRetrieveTransaction is returned when a transaction fails to retrieve.
+	ErrEVMFailedToRetrieveTransaction = "failed to retrieve transaction"
+
+	// ErrEVMInvalidAddress is returned when an address is invalid.
+	ErrEVMInvalidAddress = "invalid address"
+
+	// ErrEVMInvalidHash is returned when a hash is invalid.
+	ErrEVMInvalidHash = "invalid hash"
 )

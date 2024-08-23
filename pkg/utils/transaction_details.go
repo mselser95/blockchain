@@ -5,6 +5,12 @@ import (
 	"time"
 )
 
+// Event represents a generic blockchain event.
+type Event struct {
+	Name   string                 // Name of the event (e.g., Transfer, Approval)
+	Params map[string]interface{} // Parameters associated with the event
+}
+
 // Log represents a log entry from a transaction.
 type Log struct {
 	Addr        Address  // Address that generated the log

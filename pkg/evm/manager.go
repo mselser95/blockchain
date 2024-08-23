@@ -8,12 +8,11 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"math/big"
-	"strings"
-
 	"github.com/mselser95/blockchain/pkg/manager"
 	"github.com/mselser95/blockchain/pkg/signer"
 	"github.com/mselser95/blockchain/pkg/utils"
+	"math/big"
+	"strings"
 )
 
 // Manager manages interactions with the EVM-compatible blockchain.
@@ -22,6 +21,7 @@ type Manager struct {
 	client        ClientInterface
 	signer        signer.TransactionSigner
 	clientFactory ClientFactory
+	network       utils.Blockchain
 }
 
 // NewManager creates a new Manager instance.
@@ -29,11 +29,13 @@ func NewManager(
 	url string,
 	signer signer.TransactionSigner,
 	clientFactory ClientFactory,
+	network utils.Blockchain,
 ) manager.BlockchainManager {
 	return &Manager{
 		url:           url,
 		signer:        signer,
 		clientFactory: clientFactory,
+		network:       network,
 	}
 }
 
@@ -137,7 +139,99 @@ func (m *Manager) SendTransaction(ctx context.Context, tx utils.Transaction) (st
 
 // GetTransactionDetails retrieves the details of a transaction by its ID.
 func (m *Manager) GetTransactionDetails(ctx context.Context, txID string) (*utils.TransactionDetails, error) {
-	return nil, utils.WrapError(utils.ErrNotImplemented, nil)
+	if m.client == nil {
+		return nil, utils.WrapError(utils.ErrClientNotStarted)
+	}
+
+	// Convert txID to a common.Hash
+	txHash := common.HexToHash(txID)
+
+	// Fetch the transaction by its hash
+	tx, isPending, err := m.client.TransactionByHash(ctx, txHash)
+	if err != nil {
+		return nil, utils.WrapError(utils.ErrEVMFailedToRetrieveTransaction, err)
+	}
+	hash, err := NewTxHash(tx.Hash().Hex(), string(m.network))
+	if err != nil {
+		return nil, utils.WrapError(utils.ErrEVMInvalidHash, err)
+	}
+
+	// Fetch the transaction receipt
+	receipt, err := m.client.TransactionReceipt(ctx, txHash)
+	if err != nil {
+		return nil, utils.WrapError(utils.ErrEVMFailedToRetrieveTransaction, err)
+	}
+
+	// Determine the transaction status
+	status := utils.Pending
+	if !isPending {
+		if receipt.Status == 1 {
+			status = utils.Confirmed
+		} else {
+			status = utils.Failed
+		}
+	}
+
+	// Retrieve logs from the transaction receipt
+	var logs []utils.Log
+	var events []utils.Event
+	for _, log := range receipt.Logs {
+		// Convert topics to strings
+		topics := topicsToStrings(log.Topics)
+
+		addr, err := NewAddress(log.Address.Hex(), m.network)
+		if err != nil {
+			return nil, utils.WrapError(utils.ErrEVMInvalidAddress, err)
+		}
+
+		// Create a log entry
+		logs = append(logs, utils.Log{
+			Addr:        addr,
+			Topics:      topics,
+			Data:        log.Data,
+			BlockNumber: log.BlockNumber,
+			TxHash:      hash,
+			Index:       log.Index,
+		})
+
+		// Example: Parse the event name from the first topic and add abstract events
+		if len(topics) > 0 {
+			events = append(events, utils.Event{
+				Name:   topics[0],                    // Assuming the first topic is the event name (this may vary)
+				Params: make(map[string]interface{}), // Add logic to populate parameters as needed
+			})
+		}
+	}
+
+	// Create the TransactionDetails object
+	fromAddress, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
+	if err != nil {
+		return nil, utils.WrapError(utils.ErrEVMInvalidAddress, err)
+	}
+
+	from, err := NewAddress(fromAddress.Hex(), m.network)
+	if err != nil {
+		return nil, utils.WrapError(utils.ErrEVMInvalidAddress, err)
+	}
+
+	to, err := NewAddress(tx.To().Hex(), m.network)
+	if err != nil {
+		return nil, utils.WrapError(utils.ErrEVMInvalidAddress, err)
+	}
+
+	details := &utils.TransactionDetails{
+		Hash:        hash,
+		Status:      status,
+		BlockNumber: receipt.BlockNumber.Uint64(),
+		From:        from,
+		To:          to,
+		Amount:      tx.Value(),
+		Fee:         new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(receipt.GasUsed)),
+		Logs:        logs,
+		Events:      convertEventsToMap(events), // Abstract events added here
+	}
+
+	return details, nil
 }
 
 // Internal functions:
@@ -190,4 +284,22 @@ func (m *Manager) getERC20Balance(ctx context.Context, address utils.Address, to
 	}
 
 	return balance, nil
+}
+
+// Helper function to convert topics to strings
+func topicsToStrings(topics []common.Hash) []string {
+	var result []string
+	for _, topic := range topics {
+		result = append(result, topic.Hex())
+	}
+	return result
+}
+
+// Helper function to convert events to a map
+func convertEventsToMap(events []utils.Event) map[string]interface{} {
+	eventMap := make(map[string]interface{})
+	for _, event := range events {
+		eventMap[event.Name] = event.Params
+	}
+	return eventMap
 }

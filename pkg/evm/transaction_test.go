@@ -1,6 +1,7 @@
 package evm_test
 
 import (
+	"github.com/ethereum/go-ethereum/common"
 	"math/big"
 	"testing"
 	"time"
@@ -22,6 +23,25 @@ func generateRandomAddress() utils.Address {
 		panic(err) // panic in test setup if address creation fails
 	}
 	return addr
+}
+
+func generateRandomHash() utils.TxHash {
+	// Generate a random 32-byte hash
+	k, err := crypto.GenerateKey()
+	if err != nil {
+		panic(err) // panic in test setup if key generation fails
+	}
+
+	hashBytes := crypto.Keccak256([]byte(common.Bytes2Hex(k.D.Bytes())))
+	hash := common.BytesToHash(hashBytes).Hex()
+
+	// Convert the hash to the utils.TxHash type
+	txHash, err := evm.NewTxHash(hash, string(utils.Ethereum))
+	if err != nil {
+		panic(err) // In a test, we can panic if the hash generation fails
+	}
+
+	return txHash
 }
 
 func TestBaseTransaction_Validate(t *testing.T) {

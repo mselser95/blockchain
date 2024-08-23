@@ -514,3 +514,34 @@ func (mr *MockClientInterfaceMockRecorder) SuggestGasTipCap(ctx interface{}) *go
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SuggestGasTipCap", reflect.TypeOf((*MockClientInterface)(nil).SuggestGasTipCap), ctx)
 }
+
+// TransactionByHash mocks base method.
+func (m *MockClientInterface) TransactionByHash(ctx context.Context, txHash common.Hash) (*types.Transaction, bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TransactionByHash", ctx, txHash)
+	ret0, _ := ret[0].(*types.Transaction)
+	ret1, _ := ret[1].(bool)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// TransactionByHash indicates an expected call of TransactionByHash.
+func (mr *MockClientInterfaceMockRecorder) TransactionByHash(ctx, txHash interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TransactionByHash", reflect.TypeOf((*MockClientInterface)(nil).TransactionByHash), ctx, txHash)
+}
+
+// TransactionReceipt mocks base method.
+func (m *MockClientInterface) TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TransactionReceipt", ctx, txHash)
+	ret0, _ := ret[0].(*types.Receipt)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// TransactionReceipt indicates an expected call of TransactionReceipt.
+func (mr *MockClientInterfaceMockRecorder) TransactionReceipt(ctx, txHash interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TransactionReceipt", reflect.TypeOf((*MockClientInterface)(nil).TransactionReceipt), ctx, txHash)
+}
